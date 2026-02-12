@@ -19,7 +19,7 @@ User message → search for relevant memories → inject into system prompt → 
 - ✅ SQLite storage (no cloud dependency)
 - ✅ Works with your IPFS/encrypted DB architecture
 ```
-D:\QoraNet-Blockchain\
+D:\(project-Folder)\
 │
 ├── memory\                          ← For Claude CLI (use NOW)
 │   ├── memory-mcp-server.js         ← ONLY this file needed
