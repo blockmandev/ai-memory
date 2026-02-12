@@ -19,6 +19,22 @@ User message → search for relevant memories → inject into system prompt → 
 - ✅ SQLite storage (no cloud dependency)
 - ✅ Works with your IPFS/encrypted DB architecture
 
+D:\QoraNet-Blockchain\
+│
+├── memory\                          ← For Claude CLI (use NOW)
+│   ├── memory-mcp-server.js         ← ONLY this file needed
+│   ├── package.json                 ← created by npm init -y
+│   └── node_modules\                ← created by npm install
+│
+│
+└── your-ai-app\                     ← For your PRODUCT (use LATER)
+    ├── memory-engine.js
+    ├── ai-sdk-tools.js
+    ├── memory-middleware.js
+    ├── embeddings.js
+    ├── examples.js
+    └── package.json
+```
 #How to Use in Claude CLI
 ```
 
