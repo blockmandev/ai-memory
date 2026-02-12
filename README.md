@@ -18,7 +18,7 @@ User message → search for relevant memories → inject into system prompt → 
 - ✅ Same middleware pattern
 - ✅ SQLite storage (no cloud dependency)
 - ✅ Works with your IPFS/encrypted DB architecture
-
+```
 D:\QoraNet-Blockchain\
 │
 ├── memory\                          ← For Claude CLI (use NOW)
