@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "memory": {
+      "command": "node",
+      "args": ["D:/(project-folders)/memory/memory-mcp-server.js"],
+      "env": {
+        "MEMORY_DB_PATH": "D:/Betting/memories.db",
+        "MEMORY_CONTAINER": "claude_memory"
+      }
+    }
+  }
+}
