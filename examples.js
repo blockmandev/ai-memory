@@ -1,11 +1,11 @@
 // ============================================================
-// examples.js — Usage Examples
-// Shows how to replace @supermemory/tools with this self-hosted version
+// examples.js v2.0 — Usage Examples
+// Shows every feature of the self-hosted memory system
 // ============================================================
 
 
 // =====================================================
-// EXAMPLE 1: Basic AI SDK Usage (replaces supermemoryTools)
+// EXAMPLE 1: Basic AI SDK Usage
 // =====================================================
 
 import { streamText } from 'ai';
@@ -14,57 +14,64 @@ import { selfHostedMemoryTools } from './ai-sdk-tools.js';
 
 const openai = createOpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// BEFORE (paid Supermemory):
-// import { supermemoryTools } from '@supermemory/tools/ai-sdk';
-// const tools = supermemoryTools(process.env.SUPERMEMORY_API_KEY);
+// BEFORE (paid):
 
-// AFTER (self-hosted, FREE):
+// AFTER (self-hosted, FREE, MORE features):
 const tools = selfHostedMemoryTools({
   dbPath: './memories.db',
   containerTags: ['user_123'],
 });
 
+// Now you have 6 tools instead of 2:
+// searchMemories, addMemory, updateMemory, forgetMemory, getUserProfile, getRelatedMemories
+
 async function chat(userMessage) {
   const result = await streamText({
     model: openai('gpt-4o'),
     messages: [{ role: 'user', content: userMessage }],
-    tools: {
-      ...tools,
-      // Add any other custom tools here
-    },
-    system: `You are a helpful assistant. When users share information about themselves,
-    remember it using the addMemory tool. When they ask questions, search your memories
-    to provide personalized responses.`,
+    tools,
+    system: `You are a helpful assistant with long-term memory.
+When users share information about themselves, save it using addMemory with appropriate type and importance:
+  - type: "static" for permanent facts (name, preferences), "dynamic" for current context
+  - importance: "critical" for identity, "high" for strong preferences, "normal" for general info
+When they ask questions, search your memories to provide personalized responses.
+Use getUserProfile at the start of sessions for full context.`,
   });
-
   return result;
 }
 
 
 // =====================================================
-// EXAMPLE 2: Auto-Memory Middleware (replaces withSupermemory)
+// EXAMPLE 2: Auto-Memory Middleware with Fact Extraction
 // =====================================================
 
 import { withMemory } from './memory-middleware.js';
+import { createFactExtractor } from './embeddings.js';
 
-// BEFORE (paid):
-// import { withSupermemory } from '@supermemory/tools/ai-sdk';
-// const model = withSupermemory(openai('gpt-4o'), 'user_123', { apiKey: '...' });
-
-// AFTER (self-hosted, FREE):
-const model = withMemory(openai('gpt-4o'), 'user_123', {
-  dbPath: './memories.db',
-  mode: 'full',           // 'profile' | 'query' | 'full'
-  addMemory: 'always',    // auto-save every conversation
-  verbose: true,           // see memory logs
+// Set up fact extraction — uses your own LLM to extract facts from conversations
+const factExtractor = createFactExtractor({
+  generateFn: async (prompt) => {
+    const result = await openai('gpt-4o-mini').doGenerate({
+      prompt: [{ role: 'user', content: prompt }],
+    });
+    return result.text;
+  },
 });
 
-// Now every call auto-injects relevant memories!
+const model = withMemory(openai('gpt-4o'), 'user_123', {
+  dbPath: './memories.db',
+  mode: 'full',
+  addMemory: 'always',
+  tokenBudget: 2000,        // never exceed this many tokens for memory context
+  onFactsExtracted: factExtractor, // auto-extract facts from every conversation
+  verbose: true,
+});
+
 async function chatWithMemory(messages) {
   const result = await streamText({
-    model,  // <-- memories auto-injected
+    model,
     messages,
-    system: 'You are a personal assistant.',
+    system: 'You are a personal assistant with perfect memory.',
   });
   return result;
 }
@@ -79,19 +86,14 @@ import { withOpenAIMemory } from './memory-middleware.js';
 
 const openaiClient = new OpenAI();
 
-// BEFORE:
-// import { createOpenAIMiddleware } from '@supermemory/tools/openai';
-// createOpenAIMiddleware(openaiClient, 'user_123', { verbose: true });
-
-// AFTER (self-hosted):
 withOpenAIMemory(openaiClient, 'user_123', {
   dbPath: './memories.db',
   mode: 'full',
   addMemory: 'always',
+  tokenBudget: 2000,
   verbose: true,
 });
 
-// Now openai.chat.completions.create() auto-injects memories!
 async function openaiChat() {
   const response = await openaiClient.chat.completions.create({
     model: 'gpt-4o',
@@ -102,19 +104,51 @@ async function openaiChat() {
 
 
 // =====================================================
-// EXAMPLE 4: With Local Embeddings (best accuracy, still free)
+// EXAMPLE 4: Framework-Agnostic Middleware
+// Works with ANY LLM: Anthropic, Gemini, local models, etc.
 // =====================================================
 
-import { createLocalEmbedding } from './embeddings.js';
+import { withGenericMemory } from './memory-middleware.js';
+
+// Wrap any chat function
+const myChat = withGenericMemory(
+  async (messages) => {
+    // Your LLM call here — Anthropic, Gemini, Ollama, anything
+    const response = await fetch('http://localhost:11434/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'llama3', messages }),
+    });
+    const data = await response.json();
+    return data.message.content;
+  },
+  'user_123',
+  { dbPath: './memories.db', addMemory: 'always' }
+);
+
+
+// =====================================================
+// EXAMPLE 5: With Local Embeddings (best accuracy, still free)
+// =====================================================
+
+import { createLocalEmbedding, createHybridEmbedding, BM25Embedding } from './embeddings.js';
 
 async function setupWithEmbeddings() {
-  // One-time setup — loads the embedding model
+  // Option A: Transformers.js (best quality, ~200ms per embed)
   const embeddingFn = await createLocalEmbedding();
+
+  // Option B: BM25 (zero deps, instant, decent quality)
+  const bm25 = new BM25Embedding();
+  bm25.buildVocabulary(['...existing memories...']);
+  const bm25Fn = bm25.asFunction();
+
+  // Option C: Hybrid — use Transformers.js with BM25 fallback
+  const hybridFn = createHybridEmbedding(embeddingFn, bm25Fn);
 
   const tools = selfHostedMemoryTools({
     dbPath: './memories.db',
     containerTags: ['user_123'],
-    embeddingFn,  // <-- enables semantic/vector search
+    embeddingFn: hybridFn,
   });
 
   return tools;
@@ -122,7 +156,7 @@ async function setupWithEmbeddings() {
 
 
 // =====================================================
-// EXAMPLE 5: Direct Memory Engine Usage
+// EXAMPLE 6: Direct Memory Engine — Full API
 // =====================================================
 
 import { MemoryEngine } from './memory-engine.js';
@@ -130,111 +164,130 @@ import { MemoryEngine } from './memory-engine.js';
 async function directUsage() {
   const engine = new MemoryEngine({ dbPath: './memories.db' });
 
-  // Add a static fact (core user info)
+  // --- Add memories with types and importance ---
   await engine.add({
-    content: 'User prefers dark mode and codes in Python',
+    content: 'User name is Alex, based in London',
     containerTags: ['user_123'],
     memoryType: 'static',
+    importance: 'critical',
   });
 
-  // Add dynamic context (recent conversation)
   await engine.add({
-    content: 'User is working on a blockchain project called QoraNet',
+    content: 'User prefers dark mode and codes in Python/TypeScript',
     containerTags: ['user_123'],
-    memoryType: 'dynamic',
+    memoryType: 'static',
+    importance: 'high',
   });
 
-  // Search memories
+  await engine.add({
+    content: 'Currently working on a blockchain project called QoraNet',
+    containerTags: ['user_123', 'project_qoranet'],  // multi-tag!
+    memoryType: 'dynamic',
+    importance: 'normal',
+  });
+
+  // --- Search with filters ---
   const results = await engine.search({
     q: 'blockchain project',
     containerTags: ['user_123'],
     limit: 5,
+    memoryTypes: ['dynamic'],      // only dynamic memories
+    minImportance: 'normal',       // skip low-importance stuff
   });
   console.log('Search results:', results);
 
-  // Get full profile
+  // --- Update a memory ---
+  await engine.update(results.results[0]?.id, {
+    content: 'Working on QoraNet v2 — new consensus algorithm',
+    importance: 'high',
+  });
+
+  // --- Link related memories ---
+  const mem1 = results.results[0];
+  if (mem1) {
+    engine.link(mem1.id, 'some_other_memory_id', 'related');
+    const related = engine.getRelated(mem1.id);
+    console.log('Related memories:', related);
+  }
+
+  // --- Get profile with search ---
   const profile = await engine.getProfile('user_123', 'what project am I working on?');
   console.log('Profile:', profile);
+  console.log('Stats:', profile.stats);
 
-  // Save a conversation
+  // --- Save a conversation with auto fact extraction ---
   await engine.addConversation({
     conversationId: 'conv_001',
     messages: [
-      { role: 'user', content: 'Help me with my blockchain project' },
-      { role: 'assistant', content: 'Sure! What aspect of QoraNet do you need help with?' },
+      { role: 'user', content: 'My name is Alex and I love sushi' },
+      { role: 'assistant', content: 'Nice to meet you, Alex! I\'ll remember that you enjoy sushi.' },
     ],
     containerTags: ['user_123'],
+    extractFacts: true, // will use onFactsExtracted callback if set
   });
+
+  // --- Cleanup old memories ---
+  const cleanupResult = engine.cleanup({ maxAgeDays: 90, dryRun: true });
+  console.log('Would clean:', cleanupResult);
+
+  // --- Export all memories ---
+  const exported = engine.exportAll(['user_123']);
+  console.log('Exported:', exported.length, 'memories');
+
+  // --- Soft delete + restore ---
+  if (results.results[0]) {
+    engine.delete(results.results[0].id);  // soft delete
+    engine.restore(results.results[0].id); // restore
+  }
 
   engine.close();
 }
 
 
 // =====================================================
-// EXAMPLE 6: Integration with YOUR IPFS/Encrypted DB
-// (specific to your project architecture)
+// EXAMPLE 7: Integration with IPFS/Encrypted DB
 // =====================================================
-
-/*
-Your architecture from our past conversations:
-  User device → search encrypted DB → decrypt → build prompt → AI API
-
-Here's how to plug this memory system into your existing flow:
-*/
 
 class HybridMemoryEngine {
   constructor(options) {
-    // Hot memory: SQLite for fast semantic search
     this.hotMemory = new MemoryEngine({
       dbPath: options.dbPath || './hot-memories.db',
       embeddingFn: options.embeddingFn,
     });
-
-    // Cold storage: Your IPFS/encrypted DB
-    this.coldStorage = options.ipfsClient; // your existing IPFS client
+    this.coldStorage = options.ipfsClient;
     this.encryptionKey = options.encryptionKey;
   }
 
   async search(query, userId) {
-    // 1. Fast search from hot memory (SQLite)
+    // Fast search from hot memory
     const hotResults = await this.hotMemory.search({
       q: query,
       containerTags: [userId],
       limit: 5,
     });
 
-    // 2. Deep search from cold storage (IPFS)
+    // Deep search from IPFS if available
     let coldResults = [];
     if (this.coldStorage) {
-      // Your existing IPFS search logic here
-      // const cids = await this.coldStorage.search(hash(query));
-      // const encrypted = await this.coldStorage.fetch(cids);
-      // coldResults = await decrypt(encrypted, this.encryptionKey);
+      // Your IPFS search logic here
     }
 
-    // 3. Merge and deduplicate
-    const allResults = [
+    return [
       ...hotResults.results.map(r => ({ ...r, source: 'hot' })),
       ...coldResults.map(r => ({ content: r, source: 'cold', score: 0.5 })),
     ];
-
-    return allResults;
   }
 
   async save(content, userId, options = {}) {
-    // Always save to hot memory for fast retrieval
     await this.hotMemory.add({
       content,
       containerTags: [userId],
       memoryType: options.memoryType || 'dynamic',
+      importance: options.importance || 'normal',
     });
 
-    // Also save to cold storage (encrypted on IPFS) for permanent record
     if (this.coldStorage && options.permanent) {
-      // Your existing encryption + IPFS upload logic
-      // const encrypted = encrypt(content, this.encryptionKey);
-      // const cid = await this.coldStorage.upload(encrypted);
-      // await storeHashOnChain(cid);
+      // Your encryption + IPFS upload logic
     }
   }
 }
