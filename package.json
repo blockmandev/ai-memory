@@ -1,21 +1,43 @@
 {
   "name": "self-hosted-ai-memory",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "type": "module",
-  "description": "Self-hosted replacement for @supermemory/tools - FREE AI memory system with SQLite + local vector search",
+  "description": "Self-hosted AI memory system — beats Supermemory, Mem0, Zep. FTS5 search, vector similarity, fact extraction, memory graph, importance scoring, time decay. FREE.",
   "main": "ai-sdk-tools.js",
+  "exports": {
+    ".": "./ai-sdk-tools.js",
+    "./engine": "./memory-engine.js",
+    "./embeddings": "./embeddings.js",
+    "./middleware": "./memory-middleware.js"
+  },
   "scripts": {
-    "test": "node examples.js"
+    "test": "node examples.js",
+    "mcp": "node memory/memory-mcp-server.js"
   },
   "dependencies": {
-    "better-sqlite3": "^11.0.0"
+    "better-sqlite3": "^11.10.0"
   },
   "optionalDependencies": {
-    "ai": "^5.0.0",
-    "zod": "^3.0.0 || ^4.0.0",
     "@xenova/transformers": "^2.17.0",
-    "openai": "^4.0.0"
+    "ai": "^5.0.0",
+    "openai": "^4.0.0",
+    "zod": "^3.0.0 || ^4.0.0"
   },
-  "keywords": ["ai", "memory", "sqlite", "vector-search", "self-hosted"],
+  "keywords": [
+    "ai",
+    "memory",
+    "sqlite",
+    "vector-search",
+    "self-hosted",
+    "supermemory",
+    "mem0",
+    "embeddings",
+    "fts5",
+    "bm25",
+    "mcp",
+    "claude",
+    "openai",
+    "vercel-ai-sdk"
+  ],
   "license": "MIT"
 }
